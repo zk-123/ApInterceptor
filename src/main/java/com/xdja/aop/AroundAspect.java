@@ -1,13 +1,19 @@
 package com.xdja.aop;
 
+import com.alibaba.fastjson.JSON;
+import com.xdja.advice.HttpAdvice;
 import com.xdja.annotation.BeforeProcess;
-import com.xdja.annotation.BeforeInterceptor;
-import com.xdja.exception.InterceptorBreakException;
+import com.xdja.annotation.Validate;
+import com.xdja.bean.ResultBean;
+import com.xdja.constant.Constant;
+import com.xdja.exception.AdviceException;
+import com.xdja.exception.InvokeException;
+import com.xdja.exception.ProcessException;
+import com.xdja.exception.ValidateException;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
-import org.aspectj.lang.annotation.Before;
 import org.aspectj.lang.annotation.Pointcut;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
@@ -16,12 +22,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
 import org.springframework.core.LocalVariableTableParameterNameDiscoverer;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.Writer;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +39,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * main Aspect
- * (虽然调用的是aop，与interceptor毫不相关，但是对外表现的行为就是一个拦截器，所以在这里引用)
+ * (虽然调用的是aop，与interceptor毫不相关，但是对外表现的行为就是一个拦截器，所以在这里引用说法)
  *
  * @author zk
  * @date 2018-01-22 10:10
@@ -47,75 +56,113 @@ public class AroundAspect {
     /**
      * transport Data (interceptor传递链中，传递的值，包含目标方法原始参数列表)
      */
-    private Map<String,Object> transportData = new ConcurrentHashMap<String, Object>();
+    private Map<String, Object> transportData = new ConcurrentHashMap<String, Object>();
 
-    @Pointcut(value = "(@annotation(com.xdja.annotation.BeforeProcess) || @annotation(com.xdja.annotation.BeforeProcess)) " +
-            "&& @annotation(org.springframework.web.bind.annotation.RequestMapping)")
-    public void PointCut(){
-    }
+    @Pointcut(value = "@annotation(org.springframework.web.bind.annotation.RequestMapping)")
+    public void PointCut() {}
 
 
     @Around(value = "PointCut()")
-    public void doProcess(ProceedingJoinPoint joinPoint){
-        //before
+    public void doProcess(ProceedingJoinPoint joinPoint) {
+        //before process(advice,validate)
         try {
             doBeforeProcess(joinPoint);
-        } catch (InterceptorBreakException e) {
-            logger.warn("before调用终止",e);
+        } catch (ProcessException e) {
+            renderResponse(e.getResultBean());
             return;
         }
+
         //process todo 返回结果处理
         try {
-            Object result = joinPoint.proceed();
-
+            joinPoint.proceed();
+        } catch (InvokeException throwable) {
+            renderResponse((throwable).getResultBean());
+            return;
         } catch (Throwable throwable) {
             throwable.printStackTrace();
         }
-        //after todo
+
+        //afterValidate todo
     }
 
     /**
-     * 执行BeforeProcess
+     * 执行BeforeProcess(暂时分为 before Advice 和 before validate)
      *
      * @param joinPoint joinPoint
-     * @throws InterceptorBreakException
+     * @throws ProcessException exception
      */
-    public void doBeforeProcess(JoinPoint joinPoint) throws InterceptorBreakException {
+    public void doBeforeProcess(JoinPoint joinPoint) throws ProcessException {
         MethodSignature methodSignature = (MethodSignature) joinPoint.getSignature();
         //存储被调用方法参数
         String[] paramNames = methodSignature.getParameterNames();
         Object[] paramsValues = joinPoint.getArgs();
-        setTransportData(paramNames,paramsValues);
+        setTransportData(paramNames, paramsValues);
         //获取注解并调用
         Method method = methodSignature.getMethod();
         BeforeProcess beforeProcess = method.getAnnotation(BeforeProcess.class);
-        BeforeInterceptor[] beforeInterceptors = beforeProcess.value();
-        for(BeforeInterceptor beforeInterceptor : beforeInterceptors){
-            //被调用的before类
-            Class<?> invokedClass = beforeInterceptor.value();
-            //被调用的before类中指定方法
-            String invokedMethodName = beforeInterceptor.method();
-            //执行调用方法
-            invokedSpecialMethod(invokedClass,invokedMethodName);
+
+        //如果存在beforeProcess，则继续执行操作
+        if(beforeProcess != null){
+            doBeforeAdvice(beforeProcess);
+            doBeforeValidate(beforeProcess);
         }
     }
 
     /**
+     * 执行前置通知
+     *
+     * @param beforeProcess beforeProcess
+     * @throws AdviceException adviceException
+     */
+    public void doBeforeAdvice(BeforeProcess beforeProcess) throws AdviceException {
+        Class<? extends HttpAdvice>[] beforeAdvices = beforeProcess.advice();
+        for(Class<? extends HttpAdvice> adviceClass : beforeAdvices){
+            try {
+                invokedSpecialMethod(adviceClass,"doAdvice");
+            } catch (InvokeException e) {
+                throw new AdviceException(e.getResultBean());
+            }
+        }
+    }
+
+    /**
+     * 执行前置校验
+     *
+     * @param beforeProcess beforeProcess
+     * @throws ValidateException validateException
+     */
+    public void doBeforeValidate(BeforeProcess beforeProcess) throws ValidateException{
+        Validate[] beforeValidates = beforeProcess.validate();
+        for (Validate beforeValidate : beforeValidates) {
+            //被调用的before类
+            Class<?> invokedClass = beforeValidate.value();
+            //被调用的before类中指定方法
+            String invokedMethodName = beforeValidate.method();
+
+            //执行调用方法
+            try {
+                invokedSpecialMethod(invokedClass, invokedMethodName);
+            } catch (InvokeException e) {
+                throw new ValidateException(e.getResultBean());
+            }
+        }
+    }
+    /**
      * 调用指定方法
      *
-     * @param clazz clazz
+     * @param clazz      clazz
      * @param methodName methodName
      */
-    public void invokedSpecialMethod(Class<?> clazz,String methodName) throws InterceptorBreakException {
+    public void invokedSpecialMethod(Class<?> clazz, String methodName) throws InvokeException {
         try {
             //may be is null
             Object targetObj = webApplicationContext.getBean(clazz);
-            if(targetObj != null){
-                Method[] methods =  clazz.getDeclaredMethods();
-                for(Method method : methods){
-                    if(method.getName().equalsIgnoreCase(methodName)){
+            if (targetObj != null) {
+                Method[] methods = clazz.getDeclaredMethods();
+                for (Method method : methods) {
+                    if (method.getName().equalsIgnoreCase(methodName)) {
                         Object[] paramValues = getInvokedSpecialMethodParams(method);
-                        Object obj = method.invoke(targetObj,paramValues);
+                        method.invoke(targetObj, paramValues);
                         return;
                     }
                 }
@@ -124,8 +171,13 @@ public class AroundAspect {
                 return;
             }
         } catch (Exception e) {
-            logger.error("调用" +clazz + "#" +methodName+"出错",e);
-            throw new InterceptorBreakException("调用中断");
+            //如果是用户主动抛，则抛出
+            if (e instanceof InvokeException) {
+                throw (InvokeException) e;
+            } else {
+                logger.error("调用" + clazz + "#" + methodName + "出错", e);
+                throw new InvokeException(ResultBean.failResult(Constant.SYSTEM_ERRROR));
+            }
         }
         logger.warn("未找到该" + clazz + "中的" + methodName + "方法");
     }
@@ -136,31 +188,31 @@ public class AroundAspect {
      * @param method method
      * @return Object[]
      */
-    public Object[] getInvokedSpecialMethodParams(Method method){
+    public Object[] getInvokedSpecialMethodParams(Method method) {
         List result = new ArrayList();
         //spring discover method parameter names
-        LocalVariableTableParameterNameDiscoverer discovererNames=
+        LocalVariableTableParameterNameDiscoverer discovererNames =
                 new LocalVariableTableParameterNameDiscoverer();
         HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
         HttpServletResponse response = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getResponse();
 
         //get parameter Object
         String[] paramNames = discovererNames.getParameterNames(method);
-        for(int i = 0 ; i < paramNames.length; i++){
+        for (int i = 0; i < paramNames.length; i++) {
             //原参数
-            if(transportData.containsKey(paramNames[i])){
+            if (transportData.containsKey(paramNames[i])) {
                 result.add(transportData.get(paramNames[i]));
-            } else if(method.getParameterTypes()[i].equals(HttpServletRequest.class)){
+            } else if (method.getParameterTypes()[i].equals(HttpServletRequest.class)) {
                 // request object
                 result.add(request);
-            } else if(method.getParameterTypes()[i].equals(HttpServletResponse.class)){
+            } else if (method.getParameterTypes()[i].equals(HttpServletResponse.class)) {
                 // response object
                 result.add(response);
-            } else if(method.getParameterTypes()[i].equals(Map.class)){
+            } else if (method.getParameterTypes()[i].equals(Map.class)) {
                 // transportData (如果找不到已经在目标方法中命名的map,则默认是transportData)
                 result.add(transportData);
             } else {
-                logger.warn(method.getDeclaringClass()+ "#" + method.getName() + "参数未找到，设为null");
+                logger.warn(method.getDeclaringClass() + "#" + method.getName() + "参数未找到，设为null");
                 result.add(null);
             }
         }
@@ -168,18 +220,42 @@ public class AroundAspect {
     }
 
     /**
+     * 渲染resultBean（JSON类型）
+     *
+     * @param resultBean resultBean
+     * @param <T> T
+     */
+    public <T> void renderResponse(ResultBean<T> resultBean){
+        HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
+        HttpServletResponse response = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getResponse();
+
+        try {
+            // is not ajax
+            if(!(!StringUtils.isEmpty(request.getHeader("x-requested-with")) && request.getHeader("x-requested-with").equals("XMLHttpRequest"))){
+                response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                return;
+            }
+            response.setCharacterEncoding("UTF-8");
+            response.setContentType("application/json");
+            Writer writer = response.getWriter();
+            writer.append(JSON.toJSONString(resultBean));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+    /**
      * 设置transportData 中的值
      *
-     * @param paramNames 参数名
+     * @param paramNames   参数名
      * @param paramsValues 参数值
      */
-    public void setTransportData(String[] paramNames,Object[] paramsValues){
+    public void setTransportData(String[] paramNames, Object[] paramsValues) {
         try {
-            for(int i = 0; i < paramNames.length ; i++){
-               setTransportData(paramNames[i],paramsValues[i]);
+            for (int i = 0; i < paramNames.length; i++) {
+                setTransportData(paramNames[i], paramsValues[i]);
             }
         } catch (Exception e) {
-            logger.error("参数名列表长度和参数值长度不符",e);
+            logger.error("参数名列表长度和参数值长度不符", e);
         }
     }
 
@@ -187,10 +263,10 @@ public class AroundAspect {
     /**
      * 设置transportData 中的值
      *
-     * @param key key
+     * @param key   key
      * @param value value
      */
-    public void setTransportData(String key,Object value){
-        transportData.put(key,value);
+    public void setTransportData(String key, Object value) {
+        transportData.put(key, value);
     }
 }

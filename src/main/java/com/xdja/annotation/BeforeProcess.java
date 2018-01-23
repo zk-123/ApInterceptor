@@ -1,5 +1,9 @@
 package com.xdja.annotation;
 
+import com.xdja.advice.DoNothingAdvice;
+import com.xdja.advice.HttpAdvice;
+import com.xdja.validate.DoNothingValidate;
+
 import java.lang.annotation.*;
 
 /**
@@ -10,8 +14,9 @@ import java.lang.annotation.*;
  */
 @Inherited
 @Documented
-@Target({ElementType.METHOD,ElementType.TYPE})
+@Target({ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface BeforeProcess {
-    BeforeInterceptor[] value();
+    Validate[] validate() default @Validate(value = DoNothingValidate.class,method = "doNothing");
+    Class<? extends HttpAdvice>[] advice() default DoNothingAdvice.class;
 }
