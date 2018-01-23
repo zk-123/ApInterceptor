@@ -3,6 +3,85 @@
 
 aspectInterceptor见名知意，是一个以aop开发为基础的interceptor(当然是基于Spring的)。主要用于解决controller层随着业务的复杂，输入的参数判断也过于多，过于复杂，从而导致不易看清逻辑的麻烦现状；如果任由这么多复杂判断逻辑存在，每次增加需求都是往controller层堆积代码，必然会导致不易阅读和不易维护；所以解决的方法就显而易见了，如果能把复杂的判断放到一处进行处理和管控，必然是更整洁和舒心的。
 
+## 例子说起
+
+
+### 场景一
+假如你为一个书店老板写一个图书网站。考虑会员购买图书的场景。在购书前，必须确保该图书有货，必须确保该书能够购买(不是限定或纪念版)，必须确保该用户是缴过费会员，必须确保会员有足够多的书币，必须校验该用户已经登录，必须校验会员有足够的信用，必须校验会员已绑定手机号。。。。。。我们可能这样写。
+```
+@RequestMapping(value = "/buyBook",method = RequestMethod.POST)
+public void buyBookById(HttpServletRequest request,HttpServletResponse response,@RequestParam("id")String id){
+    if(校验该图书有货){
+
+    }
+    if(该书能够购买){
+
+    }
+    if(用户已经登录){
+
+    }
+    if(该用户是会员){
+
+    }
+    if(会员有足够多的书币){
+
+    }
+    if(会员有足够的信用){
+
+    }
+    if(已绑定手机号){
+
+    }
+    ....
+    bookservice.buybook(user,book);
+   
+}
+```
+
+随着业务更加复杂，要添加的内容还有更多；往往很多能在进入control前的校验，我们把它堆积到了一起；可能有人会说：我们也可以把这些校验放到controller的一个方法里进行调用，这样看起来不算是乱了吧。
+
+这样导致：
++ 在controller中本来就是描述服务调用关系，存放这些的代码会造成一个结果---------易读性更为差的代码。
++ 进一步说，这些代码有些可以重用，比如：检查是否是会员，检查用户是否绑定手机号........等等等。
+
+如果能把这些代码放到别的地方可能效果会更好，所以我们可以用这个插件这样写：
+```
+@BeforeProcess(advice = {VIPCheck.class, BindingPhoneCheck.class, BuyBookCheck.class})
+@RequestMapping(value = "/buyBook",method = RequestMethod.POST)
+public void buyBookById(HttpServletRequest request,HttpServletResponse response,@RequestParam("id")String id){
+    bookservice.buybook(user,book);
+}
+```
+这样写是不是看起来更舒心点了，下面介绍下该用法：
++ 增加了BeforeProcess注解：该注解是声明在方法上的注解。其中的advice值是一个Class数组，该数组里存放指定的校验类，校验会按照类存放的顺序执行，如果校验失败则会进行相应的处理，不会进入该方法。
++ 如上述代码，该advice中包含了，VIP校验，用户绑定手机号校验，以及其他校验。这样做到了 VIP校验，用户绑定手机号校验可以在其他地方重用。
++ 校验类：
+```
+@Component
+public class VIPCheck implements HttpAdvice{
+    
+    @Autowired
+    private UserManagerService userManagerService;
+    
+    @Override
+    public void doAdvice(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, Map<String, Object> map) throws AdviceException {
+        User user = (User) httpServletRequest.getSession().getAttribute("user");
+        boolean vip = userManagerService.isVip(user);
+        if(!vip){
+            throw new AdviceException(ResultBean.failResult("必须是会员"));
+        }
+    }
+}
+```
+1、校验类需要继承一个HttpAdvice（目前仅支持ajax返回json结果校验）,并实现其doAdvice()方法，如果校验失败，抛出`AdviceException`异常并传入一个ResultBean参数(返回结果形式详见：ResultBean)。
+
+2、doAdvice参数：HttpServletRequest,httpServletResponse 为请求的request和response。最后一个 Map 是将被拦截的方法参数以key,value形式写入。如：该VIPCheck中map中包含三个成员：request -> request的值, response -> response的值,id-> id的值 
+
+  
+### 场景二
+还是书店老板，还是你写的网站，这次要求写一个添加图书的请求。你可能会这样写
+
+
 说了这么多，该项目(称之为插件比较好),该插件是如何简化上述说的这些的？
 
 + 基于注解：仅仅简单增加一个注解就能使复杂的业务参数判断消失的无影无踪
