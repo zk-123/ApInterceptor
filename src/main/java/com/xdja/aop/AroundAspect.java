@@ -31,6 +31,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.Writer;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -74,12 +75,19 @@ public class AroundAspect {
 
         //process todo 返回结果处理
         try {
-            joinPoint.proceed();
+            Object obj = joinPoint.proceed();
+
+            if (obj instanceof ResultBean) {
+                ResultBean resultBean = (ResultBean) obj;
+                renderResponse(resultBean);
+            }
         } catch (InvokeException throwable) {
+            //若抛出InvokeException 则应该有resultBean
             renderResponse((throwable).getResultBean());
             return;
         } catch (Throwable throwable) {
-            throwable.printStackTrace();
+            renderResponse(ResultBean.failResult(Constant.SYSTEM_ERRROR));
+            logger.error("调用出错",throwable);
         }
 
         //afterValidate todo
@@ -171,9 +179,9 @@ public class AroundAspect {
                 return;
             }
         } catch (Exception e) {
-            //如果是用户主动抛，则抛出
-            if (e instanceof InvokeException) {
-                throw (InvokeException) e;
+            //如果是用户主动抛，则直接抛出
+            if (e instanceof InvocationTargetException && ((InvocationTargetException) e).getTargetException() instanceof InvokeException) {
+                throw ((InvokeException)((InvocationTargetException) e).getTargetException());
             } else {
                 logger.error("调用" + clazz + "#" + methodName + "出错", e);
                 throw new InvokeException(ResultBean.failResult(Constant.SYSTEM_ERRROR));
@@ -228,19 +236,22 @@ public class AroundAspect {
     public <T> void renderResponse(ResultBean<T> resultBean){
         HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
         HttpServletResponse response = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getResponse();
+        Writer writer = null;
 
         try {
-            // is not ajax
-            if(!(!StringUtils.isEmpty(request.getHeader("x-requested-with")) && request.getHeader("x-requested-with").equals("XMLHttpRequest"))){
-                response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                return;
-            }
             response.setCharacterEncoding("UTF-8");
             response.setContentType("application/json");
-            Writer writer = response.getWriter();
+            writer = response.getWriter();
             writer.append(JSON.toJSONString(resultBean));
         } catch (IOException e) {
             e.printStackTrace();
+        }finally {
+            try {
+                writer.close();
+                response.flushBuffer();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
     /**

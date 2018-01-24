@@ -69,12 +69,12 @@ public class ResultBean<T> implements Serializable{
     /**
      * 创建失败的返回结果
      *
-     * @param data data
+     * @param message message
      * @param <T> T
      * @return resultBean of fail
      */
-    public static <T>ResultBean<T> failResult(T data){
-        return failResult(null,data);
+    public static <T>ResultBean<T> failResult(String message){
+        return failResult(message,null);
     }
 
     /**
@@ -90,10 +90,10 @@ public class ResultBean<T> implements Serializable{
     /**
      * 创建成功返回结果
      *
-     * @param data data
+     * @param message message
      */
-    public static <T>ResultBean<T> successResult(T data){
-        return successResult(null,data);
+    public static <T>ResultBean<T> successResult(String message){
+        return successResult(message,null);
     }
 
     /**

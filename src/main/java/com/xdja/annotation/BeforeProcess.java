@@ -3,6 +3,7 @@ package com.xdja.annotation;
 import com.xdja.advice.DoNothingAdvice;
 import com.xdja.advice.HttpAdvice;
 import com.xdja.validate.DoNothingValidate;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.lang.annotation.*;
 
@@ -16,6 +17,7 @@ import java.lang.annotation.*;
 @Documented
 @Target({ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
+@ResponseBody
 public @interface BeforeProcess {
     Validate[] validate() default @Validate(value = DoNothingValidate.class,method = "doNothing");
     Class<? extends HttpAdvice>[] advice() default DoNothingAdvice.class;

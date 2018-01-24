@@ -1,6 +1,6 @@
 package com.xdja.advice;
 
-import com.xdja.exception.AdviceException;
+import com.xdja.exception.InvokeException;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -20,5 +20,5 @@ public interface HttpAdvice {
      * @param response response
      * @param transportData 传输参数
      */
-    void doAdvice(HttpServletRequest request, HttpServletResponse response,Map<String, Object> transportData) throws AdviceException;
+    void doAdvice(HttpServletRequest request, HttpServletResponse response,Map<String, Object> transportData) throws InvokeException;
 }

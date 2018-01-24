@@ -15,7 +15,7 @@ public class ProcessException extends Exception{
     protected ResultBean resultBean;
 
     public ProcessException(ResultBean resultBean){
-
+        this.resultBean = resultBean;
     }
     public ResultBean getResultBean() {
         return resultBean;

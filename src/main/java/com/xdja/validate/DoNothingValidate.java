@@ -1,6 +1,6 @@
 package com.xdja.validate;
 
-import org.springframework.stereotype.Component;
+        import org.springframework.stereotype.Component;
 
 /**
  * doNothing
