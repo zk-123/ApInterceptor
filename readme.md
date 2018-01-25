@@ -8,7 +8,7 @@ aspectInterceptor见名知意，是一个以aop开发为基础的interceptor(当
 
 ### 场景一
 假如你为一个书店老板写一个图书网站。考虑会员购买图书的场景。在购书前，必须确保该图书有货，必须确保该书能够购买(不是限定或纪念版)，必须确保该用户是缴过费会员，必须确保会员有足够多的书币，必须校验该用户已经登录，必须校验会员有足够的信用，必须校验会员已绑定手机号。。。。。。我们可能这样写。
-```
+```java
 @RequestMapping(value = "/buyBook",method = RequestMethod.POST)
 public void buyBookById(HttpServletRequest request,HttpServletResponse response,@RequestParam("id")String id){
     if(校验该图书有货){
@@ -45,7 +45,7 @@ public void buyBookById(HttpServletRequest request,HttpServletResponse response,
 + 进一步说，这些代码有些可以重用，比如：检查是否是会员，检查用户是否绑定手机号........等等等。
 
 如果能把这些代码放到别的地方可能效果会更好，所以我们可以用这个插件这样写：
-```
+```java
 @BeforeProcess(advice = {VIPCheck.class, BindingPhoneCheck.class, BuyBookCheck.class})
 @RequestMapping(value = "/buyBook",method = RequestMethod.POST)
 public void buyBookById(HttpServletRequest request,HttpServletResponse response,@RequestParam("id")String id){
@@ -56,7 +56,7 @@ public void buyBookById(HttpServletRequest request,HttpServletResponse response,
 + 增加了BeforeProcess注解：该注解是声明在方法上的注解。其中的advice值是一个Class数组，该数组里存放指定的校验类，校验会按照类存放的顺序执行，如果校验失败则会进行相应的处理，不会进入该方法。
 + 如上述代码，该advice中包含了，VIP校验，用户绑定手机号校验，以及其他校验。这样做到了 VIP校验，用户绑定手机号校验可以在其他地方重用。
 + 校验类：
-```
+```java
 @Component
 public class VIPCheck implements HttpAdvice{
     
@@ -64,25 +64,118 @@ public class VIPCheck implements HttpAdvice{
     private UserManagerService userManagerService;
     
     @Override
-    public void doAdvice(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, Map<String, Object> map) throws AdviceException {
+    public void doAdvice(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, Map<String, Object> map) throws InvokeException{
         User user = (User) httpServletRequest.getSession().getAttribute("user");
         boolean vip = userManagerService.isVip(user);
         if(!vip){
-            throw new AdviceException(ResultBean.failResult("必须是会员"));
+            throw new InvokeException(ResultBean.failResult("必须是会员"));
         }
     }
 }
 ```
-1、校验类需要继承一个HttpAdvice（目前仅支持ajax返回json结果校验）,并实现其doAdvice()方法，如果校验失败，抛出`AdviceException`异常并传入一个ResultBean参数(返回结果形式详见：ResultBean)。
+1、校验类需要继承一个HttpAdvice（目前仅支持ajax返回json结果校验）,并实现其doAdvice()方法，如果校验失败，抛出`InvokeException`异常并传入一个ResultBean参数(返回结果形式详见：ResultBean)。
 
 2、doAdvice参数：HttpServletRequest,httpServletResponse 为请求的request和response。最后一个 Map 是将被拦截的方法参数以key,value形式写入。如：该VIPCheck中map中包含三个成员：request -> request的值, response -> response的值,id-> id的值 
 
   
 ### 场景二
-还是书店老板，还是你写的网站，这次要求写一个添加图书的请求。你可能会这样写
+还是书店老板，还是你写的网站，这次要求写一个购买图书的请求。你可能会这样写
+```java
+@RequestMapping(value = "/buyBook",method = RequestMethod.POST)
+public void buyBook(Order order){
+    if(StringUtils.isEmpty(order.getBookName())){
+        //处理为null的请求
+    }
+    if(StringUtils.isEmpty(order.getBookContent())){
+        //处理为null的请求
+    }
+    ...
+    bookService.buyBook(order);
+}
+```
+按照上一个例子的思路，我们可以改成这样
+```java
+@BeforeProcess(advice = {BuyBook.class})
+@RequestMapping(value = "/buyBook",method = RequestMethod.POST)
+public void buyBook(Order order){
+    bookService.buyBook(order);
+}
+```
+后来，你寻思着，难道每次校验我都单独写一个校验类？如果有的校验只有两行代码，还要写一个类吗？很多时候，校验的场景会很多，但是代码量会很少；比如一个controller类中有好几处校验场景，而且这些校验往往都是特定的，重用的很少。
+
+面对这样的场景，小插件也是有办法解决的~，废话不多说，直接上例子：
+
+```java
+@BeforeProcess(validate = {@Validate(value = BookControllerValidate.class,method = "buyBook")})
+@RequestMapping(value = "/buyBook",method = RequestMethod.POST)
+public void buyBook(Order order){
+    bookService.buyBook(order);
+}
+```
+通过这个例子我们可以看出：
++ 还是@BeforeProcess注解，只不过选项换成了`validate`,`validate`里存放多个校验**类.方法**,用`@Validate`注解包裹。其含义和advice选项差不多，只不过精确到方法了
++ 查看校验类`BookControllerValidate.class`中的内容：
+```
+@Component
+public class BookControllerValidate {
+    /**
+     * 添加图书校验
+     *
+     * @param book book
+     * @throws InvokeException
+     */
+    public void addBook(Book book) throws InvokeException {
+        if(StringUtils.isEmpty(book.getBookName())){
+            throw new InvokeException(ResultBean.failResult("书名不能为空"));
+        }
+        if(StringUtils.isEmpty(book.getBookContent())){
+            throw new InvokeException(ResultBean.failResult("书内容不能为空"));
+        }
+    }
+
+    /**
+     * 购买图书校验
+     *
+     * @param order order
+     * @throws InvokeException
+     */
+    public void buyBook(Order order) throws InvokeException {
+        if(StringUtils.isEmpty(order.getBookName())){
+            throw new InvokeException(ResultBean.failResult("图书必选"));
+        }
+
+        if(StringUtils.isEmpty(order.getNumber())){
+            throw new InvokeException(ResultBean.failResult("数量必选"));
+        }
+    }
+}
+```
+1、首先`BookControllerValidate`是一个Spring Bean，并没有继承任何接口或类。
+
+2、然后其中的校验方法可以有多个(这一点应该早就料想到了)，校验方法和`advice`选项相似，都是通过抛出`InvokeException(ResultBean)`异常来终止校验
+
+3、与`advie`选项不同的是，校验方法的**参数**可以随意多少。随意并不意味着可以随便写与业务无关的参数，参数必须是被调用方法(如：购买图书校验的参数，必须是`BookController`中`/buyBook`请求中的参数)，甚至可以加`HttpServletRequest`和`HttpSerlvetResponse`。但是这样灵活的参数，也往往牺牲了它的重用性。
+
+4、方法参数除了3、介绍的这几种，还有一个与`advice`选项一样的`Map`参数,用来在校验过程中传输必要的数据，这里的`Map`和`advice`中的`Map`参数完全等价。
+
+### 还有吗？
+单单的校验可能满足我们绝大部分的需求了。不管是重用校验还是特殊校验，都提供了很好的支持。
+
+但是还有。。。。还有进入Controller方法中的一些辅助操作，例子说起：
+```java
+@BeforeProcess(advice = {VIPCheck.class})
+@RequestMapping(value = "/index",method = RequestMethod.GET)
+public ResultBean getBookInfoById(){
+    return ResultBean.successResult("hello world");
+}
+```
++ 最不一样的就是，在controller层支持返回`ResultBean`,并自动将返回的`ResultBean`转化成JSON(高版本的Spring都会支持)。
++ 除了返回，还支持以抛出`InvokeException(ResultBean) `异常的形式返回ResultBean，这意味着，可以把判断的逻辑放到`Service`层(不知道好不好)
++ 还有封装好的`ValidateUtils`工具类支持断言校验
 
 
-说了这么多，该项目(称之为插件比较好),该插件是如何简化上述说的这些的？
+### 最后
+至此，这一个插件的介绍也接近尾声。它有哪些优点呢？
 
 + 基于注解：仅仅简单增加一个注解就能使复杂的业务参数判断消失的无影无踪
 + 不冲突：具体的不冲突是指不与之前写过的代码冲突，不是引入该插件，就必须把之前的代码重构或重写
@@ -101,47 +194,5 @@ public class VIPCheck implements HttpAdvice{
 </dependency>
 ```
 
-## 使用
-在Controller中使用，加入`@BeforeProcess`注解
-```
-@Controller
-public class IndexController {
-
-    @BeforeProcess({@BeforeInterceptor(value = AspectTest.class,method = "doSomething"),
-            @BeforeInterceptor(value = AspectTest.class,method = "doSomething"),
-            @BeforeInterceptor(value = AspectTest.class,method = "doSomething")})
-    @RequestMapping(value = {"/","/index"},method = RequestMethod.GET)
-    @ResponseBody
-    public String index(HttpServletRequest request, HttpServletResponse response, ModelMap modelMap){
-        return "hello";
-    }
-}
-```
-
-+ `@BeforeProcess`注解必须在有`@RequestMapping`的地方使用，也是体现了它作为拦截器的体现(虽然调用的是aop，与interceptor毫不相关，但是对外表现的行为就是一个拦截器,所以这里用拦截器来称呼它)
-+ `@BeforeProcess` 注解中包含一个`@BeforeInterceptor`数组，一个`@BeforeInterceptor`包含具体的拦截器实现类和方法
-+ `@BeforeInterceptor`调用顺序和数组顺序一致
-+ 被调用类为一个Bean(即Spring Bean `@Component`注解修饰)，除此之外，无其他要求
-
-AspectTest 类
-
-```
-@Component
-public class AspectTest {
-    public void doSomething(HttpServletRequest request, ModelMap modelMap,Map<String, Object> transportData){
-        System.out.println(request.getRequestURL().toString());
-        System.out.println("do something");
-    }
-}
-
-```
-+ AspectTest 类无其他特点，需要注意的就是其被调用的方法。被调用的方法参数可以为一到多个，参数一般为被拦截的Controller的方法里的参数，可以随意填写多少，必须的是被调用方法的参数名必须和被拦截的Controller的方法参数名一致。
-+ 大家应该注意到了还多出来一个`Map<String, Object> transportData`参数。这个参数是Controller的方法参数中没有的变量，它是主要用来存放所有Controller的方法参数(key)和值(value)的一个介质。除此之外，它还有一个作用就是可以在Interceptor中携带变量进行传输
-
-## 至此
-至此，简单的一个雏形已经完成了，但是也只是一个雏形，还有很多工作还未做。通过该雏形，可以看出一个面向aop思想的应用，也在考虑是否有必要继续做下去。
-### TODO
-+ `@AfterProcess`注解
-+ 拦截器中断
-+ 返回值的统一处理
-+ 不仅仅基于简单的判断拦截器，权限以及其他的一些可以放到aop的切面工作
+### Todo And Think
++ 借助于这样的思路，是否可以把复杂的权限校验，采用类似的方法进行封装和改进
