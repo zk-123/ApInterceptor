@@ -184,11 +184,11 @@ public ResultBean getBookInfoById(){
 
 ## 引入
 
-如：暂时公司内部使用
+如：
 
 ```xml
 <dependency>
-   <groupId>com.xdja</groupId>
+   <groupId>com.XXX</groupId>
    <artifactId>aspectInterceptor</artifactId>
    <version>0.0.1</version>
 </dependency>
