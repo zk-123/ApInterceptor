@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.xdja</groupId>
-    <artifactId>aspectInterceptor</artifactId>
+    <artifactId>avalidate</artifactId>
     <version>1.0</version>
 
     <properties>

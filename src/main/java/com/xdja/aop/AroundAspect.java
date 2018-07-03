@@ -12,15 +12,14 @@ import com.xdja.exception.ProcessException;
 import com.xdja.exception.ValidateException;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.ProceedingJoinPoint;
-import org.aspectj.lang.annotation.Around;
-import org.aspectj.lang.annotation.Aspect;
-import org.aspectj.lang.annotation.Pointcut;
+import org.aspectj.lang.annotation.*;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
 import org.springframework.core.LocalVariableTableParameterNameDiscoverer;
+import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.context.WebApplicationContext;
@@ -48,7 +47,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Aspect
 @Scope("prototype")
 @Component
-public class AroundAspect {
+public class AroundAspect implements Ordered {
     private static Logger logger = LoggerFactory.getLogger(AroundAspect.class);
 
     @Autowired
@@ -60,38 +59,50 @@ public class AroundAspect {
     private Map<String, Object> transportData = new ConcurrentHashMap<String, Object>();
 
     @Pointcut(value = "@annotation(org.springframework.web.bind.annotation.RequestMapping)")
-    public void PointCut() {}
+    public void aValidate() {
+    }
 
-
-    @Around(value = "PointCut()")
-    public void doProcess(ProceedingJoinPoint joinPoint) {
-        //before process(advice,validate)
+    /**
+     * before validate and advice
+     *
+     * @param joinPoint joinPoint
+     */
+    @Before("aValidate()")
+    public void doBeforeValidate(JoinPoint joinPoint) {
         try {
             doBeforeProcess(joinPoint);
         } catch (ProcessException e) {
             renderResponse(e.getResultBean());
-            return;
         }
-
-        //process todo 返回结果处理
-        try {
-            Object obj = joinPoint.proceed();
-
-            if (obj instanceof ResultBean) {
-                ResultBean resultBean = (ResultBean) obj;
-                renderResponse(resultBean);
-            }
-        } catch (InvokeException throwable) {
-            //若抛出InvokeException 则应该有resultBean
-            renderResponse((throwable).getResultBean());
-            return;
-        } catch (Throwable throwable) {
-            renderResponse(ResultBean.failResult(Constant.SYSTEM_ERRROR));
-            logger.error("调用出错",throwable);
-        }
-
-        //afterValidate todo
     }
+
+    /**
+     * deal return value
+     *
+     * @param joinPoint joinPoint
+     * @param result the value of return
+     */
+    @AfterReturning(value = "aValidate()",returning = "result")
+    public void doReturnValue(JoinPoint joinPoint,Object result){
+        if (result instanceof ResultBean) {
+            ResultBean resultBean = (ResultBean) result;
+            renderResponse(resultBean);
+        }
+    }
+
+    /**
+     * deal exception of target method
+     *
+     * @param exception exception
+     */
+    @AfterThrowing(value = "aValidate()",throwing = "exception")
+    public void doThrowing(Throwable exception){
+        if (exception instanceof InvokeException) {
+            InvokeException invokeException = (InvokeException) exception;
+            renderResponse(invokeException.getResultBean());
+        }
+    }
+
 
     /**
      * 执行BeforeProcess(暂时分为 before Advice 和 before validate)
@@ -110,7 +121,7 @@ public class AroundAspect {
         BeforeProcess beforeProcess = method.getAnnotation(BeforeProcess.class);
 
         //如果存在beforeProcess，则继续执行操作
-        if(beforeProcess != null){
+        if (beforeProcess != null) {
             doBeforeAdvice(beforeProcess);
             doBeforeValidate(beforeProcess);
         }
@@ -124,9 +135,9 @@ public class AroundAspect {
      */
     public void doBeforeAdvice(BeforeProcess beforeProcess) throws AdviceException {
         Class<? extends HttpAdvice>[] beforeAdvices = beforeProcess.advice();
-        for(Class<? extends HttpAdvice> adviceClass : beforeAdvices){
+        for (Class<? extends HttpAdvice> adviceClass : beforeAdvices) {
             try {
-                invokedSpecialMethod(adviceClass,"doAdvice");
+                invokedSpecialMethod(adviceClass, "doAdvice");
             } catch (InvokeException e) {
                 throw new AdviceException(e.getResultBean());
             }
@@ -139,7 +150,7 @@ public class AroundAspect {
      * @param beforeProcess beforeProcess
      * @throws ValidateException validateException
      */
-    public void doBeforeValidate(BeforeProcess beforeProcess) throws ValidateException{
+    public void doBeforeValidate(BeforeProcess beforeProcess) throws ValidateException {
         Validate[] beforeValidates = beforeProcess.validate();
         for (Validate beforeValidate : beforeValidates) {
             //被调用的before类
@@ -155,6 +166,7 @@ public class AroundAspect {
             }
         }
     }
+
     /**
      * 调用指定方法
      *
@@ -181,7 +193,7 @@ public class AroundAspect {
         } catch (Exception e) {
             //如果是用户主动抛，则直接抛出
             if (e instanceof InvocationTargetException && ((InvocationTargetException) e).getTargetException() instanceof InvokeException) {
-                throw ((InvokeException)((InvocationTargetException) e).getTargetException());
+                throw ((InvokeException) ((InvocationTargetException) e).getTargetException());
             } else {
                 logger.error("调用" + clazz + "#" + methodName + "出错", e);
                 throw new InvokeException(ResultBean.failResult(Constant.SYSTEM_ERRROR));
@@ -231,9 +243,9 @@ public class AroundAspect {
      * 渲染resultBean（JSON类型）
      *
      * @param resultBean resultBean
-     * @param <T> T
+     * @param <T>        T
      */
-    public <T> void renderResponse(ResultBean<T> resultBean){
+    public <T> void renderResponse(ResultBean<T> resultBean) {
         HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
         HttpServletResponse response = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getResponse();
         Writer writer = null;
@@ -245,7 +257,7 @@ public class AroundAspect {
             writer.append(JSON.toJSONString(resultBean));
         } catch (IOException e) {
             e.printStackTrace();
-        }finally {
+        } finally {
             try {
                 writer.close();
                 response.flushBuffer();
@@ -254,6 +266,7 @@ public class AroundAspect {
             }
         }
     }
+
     /**
      * 设置transportData 中的值
      *
@@ -279,5 +292,9 @@ public class AroundAspect {
      */
     public void setTransportData(String key, Object value) {
         transportData.put(key, value);
+    }
+
+    public int getOrder() {
+        return Integer.MAX_VALUE;
     }
 }

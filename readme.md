@@ -1,6 +1,6 @@
-## AspectInterceptor
+## aValidate
 
-aspectInterceptor见名知意，是一个以aop开发为基础的interceptor(当然是基于Spring的)。主要用于解决controller层随着业务的复杂，输入的参数判断也过于多，过于复杂，从而导致不易看清逻辑的麻烦现状；如果任由这么多复杂判断逻辑存在，每次增加需求都是往controller层堆积代码，必然会导致不易阅读和不易维护；所以解决的方法就显而易见了，如果能把复杂的判断放到一处进行处理和管控，必然是更整洁和舒心的。
+aValidate见名知意，是一个以aop开发为基础的interceptor(当然是基于Spring的)。主要用于解决controller层随着业务的复杂，输入的参数判断也过于多，过于复杂，从而导致不易看清逻辑的麻烦现状；如果任由这么多复杂判断逻辑存在，每次增加需求都是往controller层堆积代码，必然会导致不易阅读和不易维护；所以解决的方法就显而易见了，如果能把复杂的判断放到一处进行处理和管控，必然是更整洁和舒心的。
 
 ## 例子说起
 
@@ -187,8 +187,8 @@ public ResultBean getBookInfoById(){
 
 ```xml
 <dependency>
-   <groupId>com.XXX</groupId>
-   <artifactId>aspectInterceptor</artifactId>
+   <groupId>cn.zkdcloud</groupId>
+   <artifactId>aValidate</artifactId>
    <version>0.0.1</version>
 </dependency>
 ```
