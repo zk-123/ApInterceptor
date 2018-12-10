@@ -5,6 +5,7 @@ import com.zkdcloud.annotation.BeforeProcess;
 import com.zkdcloud.annotation.Validate;
 import com.zkdcloud.constant.Constant;
 import com.zkdcloud.exception.AdviceException;
+import com.zkdcloud.exception.InvokeException;
 import com.zkdcloud.exception.ProcessException;
 import com.zkdcloud.exception.ValidateException;
 import org.aspectj.lang.JoinPoint;
@@ -104,11 +105,7 @@ public class AroundAspect implements Ordered {
     public void doBeforeAdvice(BeforeProcess beforeProcess) throws AdviceException {
         Class<? extends HttpAdvice>[] beforeAdvices = beforeProcess.advice();
         for (Class<? extends HttpAdvice> adviceClass : beforeAdvices) {
-            try {
-                invokedSpecialMethod(adviceClass, "doAdvice");
-            } catch (Exception e) {
-                throw new AdviceException(e.getMessage());
-            }
+            invokedSpecialMethod(adviceClass, "doAdvice");
         }
     }
 
