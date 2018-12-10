@@ -1,27 +1,23 @@
-package com.xdja.aop;
+package com.zkdcloud.aop;
 
-import com.alibaba.fastjson.JSON;
-import com.xdja.advice.HttpAdvice;
-import com.xdja.annotation.BeforeProcess;
-import com.xdja.annotation.Validate;
-import com.xdja.bean.ResultBean;
-import com.xdja.constant.Constant;
-import com.xdja.exception.AdviceException;
-import com.xdja.exception.InvokeException;
-import com.xdja.exception.ProcessException;
-import com.xdja.exception.ValidateException;
+import com.zkdcloud.advice.HttpAdvice;
+import com.zkdcloud.annotation.BeforeProcess;
+import com.zkdcloud.annotation.Validate;
+import com.zkdcloud.constant.Constant;
+import com.zkdcloud.exception.AdviceException;
+import com.zkdcloud.exception.ProcessException;
+import com.zkdcloud.exception.ValidateException;
 import org.aspectj.lang.JoinPoint;
-import org.aspectj.lang.ProceedingJoinPoint;
-import org.aspectj.lang.annotation.*;
+import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.annotation.Before;
+import org.aspectj.lang.annotation.Pointcut;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
 import org.springframework.core.LocalVariableTableParameterNameDiscoverer;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -42,10 +38,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * (虽然调用的是aop，与interceptor毫不相关，但是对外表现的行为就是一个拦截器，所以在这里引用说法)
  *
  * @author zk
- * @date 2018-01-22 10:10
+ * @since 2018-01-22 10:10
  */
 @Aspect
-@Scope("prototype")
 @Component
 public class AroundAspect implements Ordered {
     private static Logger logger = LoggerFactory.getLogger(AroundAspect.class);
@@ -58,7 +53,7 @@ public class AroundAspect implements Ordered {
      */
     private Map<String, Object> transportData = new ConcurrentHashMap<String, Object>();
 
-    @Pointcut(value = "@annotation(org.springframework.web.bind.annotation.RequestMapping)")
+    @Pointcut(value = "@annotation(com.zkdcloud.annotation.BeforeProcess)")
     public void aValidate() {
     }
 
@@ -72,34 +67,7 @@ public class AroundAspect implements Ordered {
         try {
             doBeforeProcess(joinPoint);
         } catch (ProcessException e) {
-            renderResponse(e.getResultBean());
-        }
-    }
-
-    /**
-     * deal return value
-     *
-     * @param joinPoint joinPoint
-     * @param result the value of return
-     */
-    @AfterReturning(value = "aValidate()",returning = "result")
-    public void doReturnValue(JoinPoint joinPoint,Object result){
-        if (result instanceof ResultBean) {
-            ResultBean resultBean = (ResultBean) result;
-            renderResponse(resultBean);
-        }
-    }
-
-    /**
-     * deal exception of target method
-     *
-     * @param exception exception
-     */
-    @AfterThrowing(value = "aValidate()",throwing = "exception")
-    public void doThrowing(Throwable exception){
-        if (exception instanceof InvokeException) {
-            InvokeException invokeException = (InvokeException) exception;
-            renderResponse(invokeException.getResultBean());
+            renderThrowable(e);
         }
     }
 
@@ -138,8 +106,8 @@ public class AroundAspect implements Ordered {
         for (Class<? extends HttpAdvice> adviceClass : beforeAdvices) {
             try {
                 invokedSpecialMethod(adviceClass, "doAdvice");
-            } catch (InvokeException e) {
-                throw new AdviceException(e.getResultBean());
+            } catch (Exception e) {
+                throw new AdviceException(e.getMessage());
             }
         }
     }
@@ -161,8 +129,8 @@ public class AroundAspect implements Ordered {
             //执行调用方法
             try {
                 invokedSpecialMethod(invokedClass, invokedMethodName);
-            } catch (InvokeException e) {
-                throw new ValidateException(e.getResultBean());
+            } catch (Exception e) {
+                throw new ValidateException(e.getMessage());
             }
         }
     }
@@ -196,7 +164,7 @@ public class AroundAspect implements Ordered {
                 throw ((InvokeException) ((InvocationTargetException) e).getTargetException());
             } else {
                 logger.error("调用" + clazz + "#" + methodName + "出错", e);
-                throw new InvokeException(ResultBean.failResult(Constant.SYSTEM_ERRROR));
+                throw new InvokeException(Constant.SYSTEM_ERRROR);
             }
         }
         logger.warn("未找到该" + clazz + "中的" + methodName + "方法");
@@ -240,13 +208,11 @@ public class AroundAspect implements Ordered {
     }
 
     /**
-     * 渲染resultBean（JSON类型）
+     * 渲染异常（JSON类型）
      *
-     * @param resultBean resultBean
-     * @param <T>        T
+     * @param throwable resultBean
      */
-    public <T> void renderResponse(ResultBean<T> resultBean) {
-        HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
+    public void renderThrowable(Throwable throwable) {
         HttpServletResponse response = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getResponse();
         Writer writer = null;
 
@@ -254,7 +220,7 @@ public class AroundAspect implements Ordered {
             response.setCharacterEncoding("UTF-8");
             response.setContentType("application/json");
             writer = response.getWriter();
-            writer.append(JSON.toJSONString(resultBean));
+            writer.append(throwable.getMessage());
         } catch (IOException e) {
             e.printStackTrace();
         } finally {

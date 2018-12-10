@@ -1,4 +1,4 @@
-package com.xdja.constant;
+package com.zkdcloud.constant;
 
 /**
  * Constant

@@ -1,4 +1,4 @@
-package com.xdja.validate;
+package com.zkdcloud.validate;
 
         import org.springframework.stereotype.Component;
 

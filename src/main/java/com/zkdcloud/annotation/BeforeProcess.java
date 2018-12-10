@@ -1,8 +1,8 @@
-package com.xdja.annotation;
+package com.zkdcloud.annotation;
 
-import com.xdja.advice.DoNothingAdvice;
-import com.xdja.advice.HttpAdvice;
-import com.xdja.validate.DoNothingValidate;
+import com.zkdcloud.advice.DoNothingAdvice;
+import com.zkdcloud.advice.HttpAdvice;
+import com.zkdcloud.validate.DoNothingValidate;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.lang.annotation.*;
