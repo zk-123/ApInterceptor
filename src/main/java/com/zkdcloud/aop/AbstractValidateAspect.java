@@ -30,8 +30,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * main Aspect
- * (虽然调用的是aop，与interceptor毫不相关，但是对外表现的行为就是一个拦截器，所以在这里引用说法)
+ *  validate aspect
  *
  * @author zk
  * @since 2018-01-22 10:10
