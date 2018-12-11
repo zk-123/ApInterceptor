@@ -3,7 +3,6 @@ package com.zkdcloud.aop;
 import com.zkdcloud.advice.HttpAdvice;
 import com.zkdcloud.annotation.BeforeProcess;
 import com.zkdcloud.annotation.Validate;
-import com.zkdcloud.constant.Constant;
 import com.zkdcloud.exception.AdviceException;
 import com.zkdcloud.exception.InvokeException;
 import com.zkdcloud.exception.ProcessException;
@@ -15,16 +14,14 @@ import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.LocalVariableTableParameterNameDiscoverer;
 import org.springframework.core.Ordered;
-import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.io.Writer;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -43,7 +40,7 @@ public abstract class AbstractValidateAspect implements Ordered {
     private static Logger logger = LoggerFactory.getLogger(AbstractValidateAspect.class);
 
     @Autowired
-    private WebApplicationContext webApplicationContext;
+    private ApplicationContext applicationContext;
 
     /**
      * transport Data (interceptor传递链中，传递的值，包含目标方法原始参数列表)
@@ -51,8 +48,7 @@ public abstract class AbstractValidateAspect implements Ordered {
     private Map<String, Object> transportData = new ConcurrentHashMap<String, Object>();
 
     @Pointcut(value = "@annotation(com.zkdcloud.annotation.BeforeProcess)")
-    public void aValidate() {
-    }
+    public void aValidate() {}
 
     /**
      * before validate and advice
@@ -60,7 +56,7 @@ public abstract class AbstractValidateAspect implements Ordered {
      * @param joinPoint joinPoint
      */
     @Before("aValidate()")
-    public void doBeforeValidate(JoinPoint joinPoint) {
+    public void doBeforeValidate(JoinPoint joinPoint) throws Throwable {
         try {
             doBeforeProcess(joinPoint);
         } catch (ProcessException e) {
@@ -147,7 +143,7 @@ public abstract class AbstractValidateAspect implements Ordered {
     public void invokedSpecialMethod(Class<?> clazz, String methodName) throws InvokeException {
         try {
             //may be is null
-            Object targetObj = webApplicationContext.getBean(clazz);
+            Object targetObj = applicationContext.getBean(clazz);
             if (targetObj != null) {
                 Method[] methods = clazz.getDeclaredMethods();
                 for (Method method : methods) {
@@ -167,7 +163,7 @@ public abstract class AbstractValidateAspect implements Ordered {
                 throw ((InvokeException) ((InvocationTargetException) e).getTargetException());
             } else {
                 logger.error("调用" + clazz + "#" + methodName + "出错", e);
-                throw new InvokeException(Constant.SYSTEM_ERRROR);
+                throw new InvokeException("validate 调用异常");
             }
         }
         logger.warn("未找到该" + clazz + "中的" + methodName + "方法");
