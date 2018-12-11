@@ -9,7 +9,6 @@ import com.zkdcloud.exception.InvokeException;
 import com.zkdcloud.exception.ProcessException;
 import com.zkdcloud.exception.ValidateException;
 import org.aspectj.lang.JoinPoint;
-import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
 import org.aspectj.lang.annotation.Pointcut;
 import org.aspectj.lang.reflect.MethodSignature;
@@ -18,7 +17,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.LocalVariableTableParameterNameDiscoverer;
 import org.springframework.core.Ordered;
-import org.springframework.stereotype.Component;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -41,10 +39,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author zk
  * @since 2018-01-22 10:10
  */
-@Aspect
-@Component
-public class AroundAspect implements Ordered {
-    private static Logger logger = LoggerFactory.getLogger(AroundAspect.class);
+public abstract class AbstractValidateAspect implements Ordered {
+    private static Logger logger = LoggerFactory.getLogger(AbstractValidateAspect.class);
 
     @Autowired
     private WebApplicationContext webApplicationContext;
@@ -72,6 +68,12 @@ public class AroundAspect implements Ordered {
         }
     }
 
+    /**
+     * 渲染异常
+     *
+     * @param throwable resultBean
+     */
+    public abstract void renderThrowable(Throwable throwable) throws Throwable;
 
     /**
      * 执行BeforeProcess(暂时分为 before Advice 和 before validate)
@@ -105,7 +107,11 @@ public class AroundAspect implements Ordered {
     public void doBeforeAdvice(BeforeProcess beforeProcess) throws AdviceException {
         Class<? extends HttpAdvice>[] beforeAdvices = beforeProcess.advice();
         for (Class<? extends HttpAdvice> adviceClass : beforeAdvices) {
-            invokedSpecialMethod(adviceClass, "doAdvice");
+            try {
+                invokedSpecialMethod(adviceClass, "doAdvice");
+            } catch (InvokeException e) {
+                throw new AdviceException(e.getMessage());
+            }
         }
     }
 
@@ -202,32 +208,6 @@ public class AroundAspect implements Ordered {
             }
         }
         return result.toArray();
-    }
-
-    /**
-     * 渲染异常（JSON类型）
-     *
-     * @param throwable resultBean
-     */
-    public void renderThrowable(Throwable throwable) {
-        HttpServletResponse response = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getResponse();
-        Writer writer = null;
-
-        try {
-            response.setCharacterEncoding("UTF-8");
-            response.setContentType("application/json");
-            writer = response.getWriter();
-            writer.append(throwable.getMessage());
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                writer.close();
-                response.flushBuffer();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
     }
 
     /**

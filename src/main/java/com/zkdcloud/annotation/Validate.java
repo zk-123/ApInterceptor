@@ -5,10 +5,12 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
 /**
- * 校验()
+ * annotation of real use
+ *
+ * {@see com.zkdcloud.annotation.BeforeProcess}
  *
  * @author zk
- * @date 2018-01-22 10:14
+ * @since 2018-01-22 10:14
  */
 @Inherited
 @Retention(RetentionPolicy.RUNTIME)

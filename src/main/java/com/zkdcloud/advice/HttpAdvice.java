@@ -1,14 +1,16 @@
 package com.zkdcloud.advice;
 
+import com.zkdcloud.exception.InvokeException;
+
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
 
 /**
- * 通知类型(前置通知,后置通知)
+ * advice of validator
  *
  * @author zk
- * @date 2018-01-23 10:57
+ * @since 2018-01-23 10:57
  */
 public interface HttpAdvice {
     /**
