@@ -71,6 +71,7 @@ public class VIPCheck implements HttpAdvice{
 
 在校验逻辑中，通过抛出异常的方式通知校验失败；稍后可以定义校验失败的逻辑以返回正常的视图和数据。
 
+点击[这里](https://github.com/zk-123/aValidate-demo)查看demo
 ## 引入
 
 如：
