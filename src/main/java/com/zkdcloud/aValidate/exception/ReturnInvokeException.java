@@ -1,4 +1,4 @@
-package com.zkdcloud.exception;
+package com.zkdcloud.aValidate.exception;
 
 /**
  * throw this exception will return object

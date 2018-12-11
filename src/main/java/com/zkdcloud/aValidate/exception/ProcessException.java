@@ -1,4 +1,4 @@
-package com.zkdcloud.exception;
+package com.zkdcloud.aValidate.exception;
 
 /**
  * the top of validate Exception

@@ -1,10 +1,10 @@
-package com.zkdcloud.aop;
+package com.zkdcloud.aValidate.aop;
 
-import com.zkdcloud.advice.HttpAdvice;
-import com.zkdcloud.annotation.BeforeProcess;
-import com.zkdcloud.annotation.Validate;
-import com.zkdcloud.exception.ProcessException;
-import com.zkdcloud.exception.ReturnInvokeException;
+import com.zkdcloud.aValidate.advice.HttpAdvice;
+import com.zkdcloud.aValidate.exception.ProcessException;
+import com.zkdcloud.aValidate.exception.ReturnInvokeException;
+import com.zkdcloud.aValidate.annotation.BeforeProcess;
+import com.zkdcloud.aValidate.annotation.Validate;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -45,7 +45,7 @@ public abstract class AbstractValidateAspect implements Ordered {
      */
     private Map<String, Object> transportData = new HashMap<String, Object>();
 
-    @Pointcut(value = "@annotation(com.zkdcloud.annotation.BeforeProcess)")
+    @Pointcut(value = "@annotation(com.zkdcloud.aValidate.annotation.BeforeProcess)")
     public void aValidate() {}
 
     /**
