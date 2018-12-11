@@ -3,7 +3,8 @@ package com.zkdcloud.aop;
 import com.zkdcloud.advice.HttpAdvice;
 import com.zkdcloud.annotation.BeforeProcess;
 import com.zkdcloud.annotation.Validate;
-import com.zkdcloud.exception.*;
+import com.zkdcloud.exception.ProcessException;
+import com.zkdcloud.exception.ReturnInvokeException;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -20,11 +21,12 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * validate aspect
@@ -41,11 +43,10 @@ public abstract class AbstractValidateAspect implements Ordered {
     /**
      * transport Data (interceptor传递链中，传递的值，包含目标方法原始参数列表)
      */
-    private Map<String, Object> transportData = new ConcurrentHashMap<String, Object>();
+    private Map<String, Object> transportData = new HashMap<String, Object>();
 
     @Pointcut(value = "@annotation(com.zkdcloud.annotation.BeforeProcess)")
-    public void aValidate() {
-    }
+    public void aValidate() {}
 
     /**
      * before validate and advice
@@ -56,13 +57,16 @@ public abstract class AbstractValidateAspect implements Ordered {
     public Object doBeforeValidate(ProceedingJoinPoint joinPoint) throws Throwable {
         try {
             doBeforeProcess(joinPoint);
-        } catch (ReturnInvokeException e) {
-            return e.getReturnObj();
         } catch (Exception e) {
-            Object result = renderThrowable(e);
-            if (result != null) {
-                return result;
+            // the throw of method invocation
+            if (e instanceof InvocationTargetException) {
+                e = (Exception) ((InvocationTargetException) e).getTargetException();
+                if (e instanceof ReturnInvokeException) {
+                    return ((ReturnInvokeException) e).getReturnObj();
+                }
             }
+
+            return renderThrowable(e);
         }
 
         return joinPoint.proceed();
@@ -208,12 +212,13 @@ public abstract class AbstractValidateAspect implements Ordered {
      * @param paramsValues 参数值
      */
     public void setTransportData(String[] paramNames, Object[] paramsValues) {
-        try {
-            for (int i = 0; i < paramNames.length; i++) {
+        int valuesLength = paramsValues == null ? 0 : paramsValues.length;
+        for (int i = 0; i < paramNames.length; i++) {
+            if(i < valuesLength){
                 setTransportData(paramNames[i], paramsValues[i]);
+            } else {
+                setTransportData(paramNames[i], null);
             }
-        } catch (Exception e) {
-            logger.error("参数名列表长度和参数值长度不符", e);
         }
     }
 

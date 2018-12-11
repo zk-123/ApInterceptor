@@ -20,5 +20,5 @@ public interface HttpAdvice {
      * @param response response
      * @param transportData 传输参数
      */
-    void doAdvice(HttpServletRequest request, HttpServletResponse response,Map<String, Object> transportData) throws InvokeException;
+    void doAdvice(HttpServletRequest request, HttpServletResponse response,Map<String, Object> transportData) throws Exception;
 }
