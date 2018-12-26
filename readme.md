@@ -83,3 +83,6 @@ public class VIPCheck implements HttpAdvice{
    <version>1.0.1</version>
 </dependency>
 ```
+
+## 其他
++ 一些想法来自于[symphony](https://github.com/b3log/symphony)
